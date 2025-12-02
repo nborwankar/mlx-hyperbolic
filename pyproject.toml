@@ -1,0 +1,113 @@
+[build-system]
+requires = [
+    "setuptools>=61.0",
+    "wheel",
+    "cmake>=3.24",
+    "pybind11>=2.10",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlx-hyperbolic"
+version = "0.1.0"
+description = "Hardware-accelerated hyperbolic embeddings using TMU-based LUT lookups on Apple Silicon"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Nitin Borwankar", email = "nitin@example.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+keywords = [
+    "mlx",
+    "hyperbolic",
+    "embeddings",
+    "apple-silicon",
+    "metal",
+    "gpu",
+    "machine-learning",
+    "neural-networks",
+    "poincare",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "mlx>=0.0.10",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-benchmark>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+docs = [
+    "sphinx>=6.0",
+    "sphinx-rtd-theme>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nborwankar/mlx_hyp"
+Documentation = "https://github.com/nborwankar/mlx_hyp#readme"
+Repository = "https://github.com/nborwankar/mlx_hyp.git"
+Issues = "https://github.com/nborwankar/mlx_hyp/issues"
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+packages = ["mlx_hyperbolic"]
+
+[tool.setuptools.package-data]
+mlx_hyperbolic = ["*.metallib", "*.so", "*.dylib"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | build
+    | dist
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "benchmark_*.py"]
+addopts = "-v --tb=short"
