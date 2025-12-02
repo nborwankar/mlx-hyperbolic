@@ -1,0 +1,116 @@
+Project Plan: Hardware-Accelerated Hyperbolic Embeddings (M2 Max)
+Objective: Implement a high-performance Hyperbolic Neural Network (HNN) primitive layer on Apple Silicon (M2 Max) by offloading transcendental operations (exp, log, tanh) to the GPU’s Texture Mapping Units (TMUs) via Metal Shading Language (MSL) and C++ extensions for MLX.
+Environment:
+* Hardware: MacBook Pro M2 Max (96GB Unified Memory).
+* OS: macOS 15.7.1.
+* Framework: MLX (Latest), Python 3.11+, Clang/LLVM.
+* Core optimization: Exploiting Zero-Copy memory between MTLBuffer and MTLTexture to use hardware linear interpolation for mathematical lookup tables.
+
+Phase 1: Infrastructure & "Hello World" Extension
+Goal: Establish the build pipeline for compiling custom C++/Metal extensions within the MLX environment.
+1. Directory Structure Setup:code Text    mlx_hyperbolic/
+2. ├── CMakeLists.txt
+3. ├── src/
+4. │   ├── main.cpp          (Python bindings)
+5. │   ├── lut_ops.cpp       (Metal dispatch logic)
+6. │   └── kernels/
+7. │       └── hyperbolic.metal
+8. ├── python/
+9. │   └── mlx_hyperbolic/
+10. │       ├── __init__.py
+11. │       └── ops.py
+12. └── tests/
+13.     └── benchmark_speed.py
+14.   
+15. Build System Configuration (CMakeLists.txt):
+    * Configure CMake to find MLX libraries and Python.
+    * Ensure metal-cpp is included or linked correctly (native in MLX backend).
+    * Set compiler flags for ARM64/Apple Silicon optimization.
+
+Phase 2: The Metal Kernel (TMU Utilization)
+Goal: Write the MSL kernel that bypasses the ALU for math and uses the Texture Unit.
+File: src/kernels/hyperbolic.metal
+Requirements:
+* Use half (Float16) precision for maximum throughput on M2.
+* Define a constexpr sampler with filter::linear to enable hardware interpolation.
+* Accept a 1D texture (texture1d<half>) containing the pre-computed math function.
+Reference Code (Snippet):
+code
+C++
+
+    
+#include <metal_stdlib>
+using namespace metal;
+
+// Force usage of Texture Mapping Unit for hardware interpolation
+constexpr sampler lin_sampler(coord::normalized, address::clamp_to_edge, filter::linear);
+
+kernel void lut_lookup_kernel(
+    device const half* input_values [[buffer(0)]],
+    device half* output_values [[buffer(1)]],
+    texture1d<half, access::sample> lut_texture [[texture(0)]],
+    constant float& input_scale [[buffer(2)]], // To map input range to 0..1
+    uint index [[thread_position_in_grid]])
+{
+    // 1. Fetch input
+    half x = input_values[index];
+    
+    // 2. Normalize coordinate (Hardware handles the math if we pass scale)
+    float coord = float(x) * input_scale;
+    
+    // 3. The "Free" Math: Sample texture. 
+    // The GPU interpolates between the two nearest pre-calculated values instantly.
+    half4 result = lut_texture.sample(lin_sampler, coord);
+    
+    // 4. Write back
+    output_values[index] = result.r;
+}
+  
+
+Phase 3: The C++ Glue (Zero-Copy Texture Binding)
+Goal: Bridge MLX arrays (buffers) to Metal Textures without copying data.
+File: src/lut_ops.cpp
+Key Implementation Logic:
+1. Input: Receive mlx::array for the input data and mlx::array for the LUT table.
+2. Cast: Retrieve the underlying MTL::Buffer* from the LUT array.
+3. View: Create a MTL::Texture that shares memory with the buffer (No memcpy).
+    * API: buffer->newTexture(descriptor, offset, bytesPerRow)
+    * Descriptor: pixelFormat = MTLPixelFormatR16Float, width = lut_size.
+4. Encode:
+    * encoder->setBuffer(...) for inputs.
+    * encoder->setTexture(lut_texture, 0) for the lookup table.
+5. Dispatch: standard grid dispatch logic based on input size.
+
+Phase 4: Python Integration & Math Logic
+Goal: Create the usable Python API and generate the Lookup Tables.
+File: python/mlx_hyperbolic/ops.py
+1. LUT Generation Utility:
+    * Create a function generate_exp_lut(size=4096, range=(0, 10)) using mlx.core.
+    * Must output float16 array.
+2. The Primitive Wrapper:
+    * Define fast_exp(x) and fast_log(x).
+    * These functions check if the static LUT exists; if not, generate and cache it.
+    * Call the C++ extension _ext.hyperbolic_lookup(x, lut, scale).
+3. Möbius Addition Implementation:
+    * Reimplement the Möbius addition formula using these fast_ primitives.
+    *         
+    * ￼
+    * 
+Phase 5: Verification & Benchmarking
+Goal: Prove the hypothesis (View B geometry + Euclidean speed).
+File: tests/benchmark_speed.py
+Metrics:
+1. Precision Check: Compare fast_exp(x) results against np.exp(x). Ensure error is within acceptable bounds for Hyperbolic embeddings (< 1e-3).
+2. Latency Benchmark:
+    * Measure time for 1 million operations using standard mx.exp.
+    * Measure time using fast_exp (Texture).
+3. Throughput Benchmark:
+    * Run a full Möbius Addition layer (16D vectors).
+    * Compare MLX Standard (ALU) vs MLX Custom (Texture).
+
+Critical Implementation Notes for the Agent
+* Memory Management: The M2 Max has unified memory. We rely on MTLResourceStorageModeShared. Do not use Managed or Private unless necessary for the texture creation API, but typically buffer->newTexture requires the buffer to be compatible.
+* Scale Factors: LUTs work on normalized coordinates [0.0, 1.0]. The C++ kernel must accept a scale factor (e.g., 1.0 / max_input_val) to map the inputs to the texture coordinates.
+* Boundary Handling: Set the sampler address mode to clamp_to_edge to prevent crash/garbage if inputs exceed the LUT range (safe saturation).
+* Float16 is Mandatory: The texture units on M2 are optimized for Half-precision. Using Float32 will reduce the throughput advantage and double the cache footprint.
+
