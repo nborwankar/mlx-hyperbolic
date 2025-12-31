@@ -195,6 +195,15 @@ All operations run on Apple Silicon GPU via MLX:
 | `exp_map` | 13.7M ops/sec | 2.1M ops/sec |
 | `log_map` | 14.3M ops/sec | 2.0M ops/sec |
 
+### vs PyManopt
+
+| Batch Size | PyManopt (CPU) | MLX (GPU) | Speedup |
+|------------|---------------|-----------|---------|
+| 1,000 | 140K/s | 3.1M/s | **22x** |
+| 10,000 | 140K/s | 25.7M/s | **183x** |
+
+> **Note**: Both implementations are memory-bound (~8 GFLOPS achieved vs 13,600 GFLOPS M2 Max peak). The speedup comes from eliminating Python loop overhead and using GPU memory bandwidth, not from saturating compute. See [PYMANOPT_vs_MLX.md](PYMANOPT_vs_MLX.md) for detailed roofline analysis.
+
 ## Project Structure
 
 ```
@@ -206,7 +215,8 @@ mlx_hyp/
 ├── tests/
 │   └── benchmark_speed.py
 ├── README.md
-├── BENCHMARKS.md        # Detailed benchmark results
+├── BENCHMARKS.md        # LUT vs native MLX benchmarks
+├── PYMANOPT_vs_MLX.md   # Comparison with PyManopt + roofline analysis
 ├── DONE.md              # Development log
 └── TODO.md              # Status tracking
 ```
