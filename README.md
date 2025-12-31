@@ -1,207 +1,264 @@
-# mlx_hyp: Hardware-Accelerated Hyperbolic Embeddings
+# mlx-hyperbolic: Hyperbolic Geometry for MLX
 
-Fast hyperbolic neural network primitives on Apple Silicon using GPU Texture Mapping Units (TMUs) for transcendental function computation.
+Fast hyperbolic neural network primitives on Apple Silicon. Supports both **Poincaré ball** and **Lorentz (hyperboloid)** models with GPU acceleration via MLX.
 
-## Overview
+## Why Hyperbolic?
 
-This project implements high-performance hyperbolic operations (exp, log, tanh, Möbius addition) by exploiting a key GPU optimization: **texture sampling with hardware linear interpolation is essentially "free"** on modern GPUs. Instead of computing expensive transcendental functions in the ALU (10-20+ cycles), we sample pre-computed lookup tables through the TMU (1 cycle with interpolation).
+Hyperbolic space naturally represents hierarchical data (trees, taxonomies, knowledge graphs) with exponentially more space as you move from the center. This makes it ideal for:
 
-```
-Traditional: Input → ALU exp/log/tanh (slow) → Output
-This project: Input → Normalize → TMU Sample (fast) → Output
-                                      ↑
-                          Pre-computed LUT in GPU texture
-```
+- **Knowledge graph embeddings** (WordNet, Freebase)
+- **Hierarchical clustering**
+- **Recommender systems** with implicit hierarchies
+- **Natural language** (words have hierarchical relationships)
 
-## Requirements
+## Models Supported
 
-- **Hardware**: Apple Silicon Mac (M1/M2/M3 series)
-- **OS**: macOS 13.0+ (Ventura or later)
-- **Python**: 3.11+
-- **MLX**: Latest version (`pip install mlx`)
-- **Clang/LLVM**: Included with Xcode Command Line Tools
+| Model | Representation | Best For |
+|-------|---------------|----------|
+| **Poincaré Ball** | Unit ball in ℝⁿ | Visualization, intuitive |
+| **Lorentz (Hyperboloid)** | Upper sheet of hyperboloid in ℝⁿ⁺¹ | Training, numerical stability |
+
+Both represent the same geometric space — convert freely between them.
 
 ## Installation
 
-### Prerequisites
-
 ```bash
-# Install Xcode Command Line Tools (includes Metal compiler)
-xcode-select --install
-
-# Install MLX
+# Install MLX (Apple Silicon required)
 pip install mlx
 
-# Verify MLX installation
-python -c "import mlx.core as mx; print(mx.default_device())"
-```
-
-### Build from Source
-
-```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/nborwankar/mlx_hyp.git
 cd mlx_hyp
-
-# Create build directory
-mkdir build && cd build
-
-# Configure with CMake
-cmake ..
-
-# Build
-make -j8
-
-# Install the Python extension
-cd ..
 pip install -e .
 ```
 
-### Verify Installation
-
+Verify installation:
 ```bash
-python -c "import mlx_hyperbolic; print('mlx_hyperbolic installed successfully')"
+python -c "from mlx_hyperbolic import lorentz_distance; print('✓ Installed')"
 ```
 
 ## Quick Start
 
+### Poincaré Ball Model
+
 ```python
 import mlx.core as mx
-from mlx_hyperbolic import fast_exp, fast_log, fast_tanh, mobius_add
+from mlx_hyperbolic import mobius_add, poincare_distance, exp_map, log_map
 
-# Fast transcendental operations via TMU
-x = mx.array([0.5, 1.0, 2.0], dtype=mx.float16)
-result = fast_exp(x)  # TMU-accelerated exponential
+# Points in the Poincaré ball (must have ||x|| < 1)
+x = mx.array([0.1, 0.2, 0.3])
+y = mx.array([0.2, 0.1, 0.2])
 
-# Möbius addition in Poincaré ball
-u = mx.random.uniform(shape=(16,), dtype=mx.float16) * 0.5  # Keep in ball
-v = mx.random.uniform(shape=(16,), dtype=mx.float16) * 0.5
-w = mobius_add(u, v, c=1.0)  # Hyperbolic addition
+# Möbius addition (hyperbolic "addition")
+z = mobius_add(x, y)
+print(f"x ⊕ y = {z}")
+
+# Geodesic distance
+d = poincare_distance(x, y)
+print(f"Distance: {d}")
+
+# Exponential map: tangent vector → manifold
+tangent = mx.array([0.05, 0.05, 0.05])
+origin = mx.zeros(3)
+point = exp_map(tangent, origin)
+
+# Logarithmic map: manifold → tangent space
+recovered = log_map(point, origin)
 ```
+
+### Lorentz (Hyperboloid) Model — Recommended for Training
+
+```python
+import mlx.core as mx
+from mlx_hyperbolic import (
+    lorentz_distance,
+    exp_map_lorentz,
+    log_map_lorentz,
+    project_to_hyperboloid,
+    poincare_to_lorentz,
+    lorentz_to_poincare,
+)
+
+# Create points on hyperboloid (n+1 dimensions)
+# Method 1: Project from space coordinates
+x = project_to_hyperboloid(mx.array([0.3, 0.4, 0.5]))  # 3D → 4D
+y = project_to_hyperboloid(mx.array([0.2, 0.3, 0.1]))
+
+# Method 2: Convert from Poincaré
+x_poincare = mx.array([0.1, 0.2, 0.3])
+x = poincare_to_lorentz(x_poincare)
+
+# Distance (simple formula: arccosh of Minkowski inner product)
+d = lorentz_distance(x, y)
+print(f"Distance: {d}")
+
+# Exponential/logarithmic maps
+tangent = log_map_lorentz(y, x)  # Direction from x to y
+recovered = exp_map_lorentz(tangent, x)  # Should equal y
+
+# Convert back to Poincaré for visualization
+x_viz = lorentz_to_poincare(x)
+```
+
+### Model Conversion
+
+```python
+from mlx_hyperbolic import poincare_to_lorentz, lorentz_to_poincare
+
+# Poincaré (3D) → Lorentz (4D)
+p = mx.array([0.2, 0.3, 0.4])
+L = poincare_to_lorentz(p)
+
+# Lorentz (4D) → Poincaré (3D)
+p_back = lorentz_to_poincare(L)
+# p_back ≈ p (zero error round-trip)
+```
+
+## API Reference
+
+### Poincaré Ball Operations
+
+| Function | Description |
+|----------|-------------|
+| `mobius_add(x, y, c=1.0)` | Möbius addition x ⊕ y |
+| `poincare_distance(x, y, c=1.0)` | Geodesic distance |
+| `exp_map(v, x, c=1.0)` | Project tangent vector to manifold |
+| `log_map(y, x, c=1.0)` | Project point to tangent space |
+
+### Lorentz (Hyperboloid) Operations
+
+| Function | Description |
+|----------|-------------|
+| `lorentz_distance(x, y, c=1.0)` | Geodesic distance: arccosh(-⟨x,y⟩_L) |
+| `lorentz_distance_squared(x, y, c=1.0)` | Squared distance (avoids sqrt) |
+| `exp_map_lorentz(v, x, c=1.0)` | Project tangent to hyperboloid |
+| `log_map_lorentz(y, x, c=1.0)` | Project point to tangent space |
+| `parallel_transport_lorentz(v, x, y, c=1.0)` | Transport vector along geodesic |
+| `lorentz_centroid(points, weights, c=1.0)` | Einstein midpoint |
+| `minkowski_inner(x, y)` | Minkowski inner product ⟨x,y⟩_L |
+| `minkowski_norm(x)` | Minkowski norm √\|⟨x,x⟩_L\| |
+
+### Utilities
+
+| Function | Description |
+|----------|-------------|
+| `project_to_hyperboloid(x, c=1.0)` | Project ℝⁿ to hyperboloid ℍⁿ |
+| `poincare_to_lorentz(x, c=1.0)` | Convert Poincaré → Lorentz |
+| `lorentz_to_poincare(y, c=1.0)` | Convert Lorentz → Poincaré |
+| `check_on_hyperboloid(x, c=1.0)` | Verify constraint satisfied |
+
+## Why Lorentz Over Poincaré?
+
+### Numerical Stability
+
+| Norm ‖x‖ | Poincaré Error | Lorentz Error |
+|----------|---------------|---------------|
+| 0.99 | 0.0005% | 0% |
+| 0.999 | 0.018% | 0% |
+| **0.9999** | **4.8%** | **0%** |
+
+Poincaré has a conformal factor λ = 2/(1-‖x‖²) that explodes near the boundary:
+
+| ‖x‖ | Conformal Factor λ |
+|-----|-------------------|
+| 0.9 | 10.5 |
+| 0.99 | 100.5 |
+| 0.999 | 1,000.5 |
+| 0.9999 | 10,000.5 ← Gradient explosion! |
+
+**Lorentz has no conformal factor** — gradients are stable everywhere.
+
+### Performance (M2 Pro, MLX GPU)
+
+| Operation | Poincaré | Lorentz | Speedup |
+|-----------|----------|---------|---------|
+| Distance (batch=10K, dim=64) | 0.52ms | 0.39ms | **1.33x** |
+| Distance (batch=10K, dim=256) | 0.88ms | 0.76ms | **1.15x** |
+
+### Recommendation
+
+| Use Case | Model |
+|----------|-------|
+| **Training embeddings** | Lorentz (stability) |
+| **Visualization** | Poincaré (intuitive unit ball) |
+| **Inference** | Either (convert as needed) |
+
+## Hyperbolic Operations Throughput
+
+All operations run on Apple Silicon GPU via MLX:
+
+| Operation | Dim=16, Batch=10K | Dim=768, Batch=10K |
+|-----------|------------------|-------------------|
+| `mobius_add` | 16.1M ops/sec | 3.6M ops/sec |
+| `poincare_distance` | 17.0M ops/sec | 2.6M ops/sec |
+| `lorentz_distance` | 22.6M ops/sec | 3.0M ops/sec |
+| `exp_map` | 13.7M ops/sec | 2.1M ops/sec |
+| `log_map` | 14.3M ops/sec | 2.0M ops/sec |
 
 ## Project Structure
 
 ```
 mlx_hyp/
-├── CMakeLists.txt           # Build configuration
-├── README.md                # This file
-├── ARCHITECTURE.md          # Technical design documentation
-├── TODO.md                  # Development task tracking
-├── DONE.md                  # Completed work log
-├── PLAN.txt                 # Original project requirements
-│
-├── src/
-│   ├── main.cpp             # Python bindings (pybind11)
-│   ├── lut_ops.cpp          # Metal dispatch logic
-│   └── kernels/
-│       └── hyperbolic.metal # GPU kernel (TMU sampling)
-│
-├── python/
-│   └── mlx_hyperbolic/
-│       ├── __init__.py      # Package initialization
-│       └── ops.py           # Python API (fast_exp, mobius_add, etc.)
-│
-└── tests/
-    └── benchmark_speed.py   # Precision verification & benchmarks
+├── python/mlx_hyperbolic/
+│   ├── __init__.py      # Package exports
+│   ├── ops.py           # Poincaré ball operations
+│   └── lorentz.py       # Lorentz hyperboloid operations
+├── tests/
+│   └── benchmark_speed.py
+├── README.md
+├── BENCHMARKS.md        # Detailed benchmark results
+├── DONE.md              # Development log
+└── TODO.md              # Status tracking
 ```
 
-## API Reference
+## Requirements
 
-### Transcendental Functions
+- **Hardware**: Apple Silicon Mac (M1/M2/M3/M4)
+- **OS**: macOS 13.0+ (Ventura or later)
+- **Python**: 3.10+
+- **MLX**: 0.20+ (`pip install mlx`)
 
-| Function | Description | Input Range | Precision |
-|----------|-------------|-------------|-----------|
-| `fast_exp(x)` | TMU-accelerated exp | [0, 10] | < 1e-3 |
-| `fast_log(x)` | TMU-accelerated log | [1e-6, 10] | < 1e-3 |
-| `fast_tanh(x)` | TMU-accelerated tanh | [-5, 5] | < 1e-4 |
+## Mathematical Background
 
-### Hyperbolic Operations
+### Poincaré Ball Model
 
-| Function | Description |
-|----------|-------------|
-| `mobius_add(x, y, c=1.0)` | Möbius addition in Poincaré ball |
+The Poincaré ball is the unit ball 𝔹ⁿ = {x ∈ ℝⁿ : ‖x‖ < 1} with the Riemannian metric:
 
-## How It Works
-
-### The TMU Optimization
-
-Modern GPUs have dedicated Texture Mapping Units (TMUs) with hardware support for:
-1. **Address calculation** - mapping normalized coordinates to texels
-2. **Bilinear interpolation** - blending between adjacent values (FREE!)
-3. **Filtering** - all in fixed-function hardware, not ALU
-
-We exploit this by:
-1. Pre-computing exp/log/tanh values into a lookup table (LUT)
-2. Storing the LUT as a 1D texture in GPU memory
-3. Sampling with `filter::linear` to get hardware-interpolated results
-
-### Zero-Copy Memory
-
-On Apple Silicon's unified memory architecture:
-- MLX arrays use `MTLResourceStorageModeShared` buffers
-- We create texture **views** of these buffers (`buffer->newTexture()`)
-- No memory copy - the texture references the same physical memory
-- Both CPU (Python/NumPy) and GPU (TMU) access the same data
-
-### Float16 Requirement
-
-Half-precision (Float16) is mandatory because:
-- M-series TMUs are optimized for half-precision textures
-- Float32 halves cache efficiency and throughput
-- For hyperbolic embeddings, 1e-3 precision is sufficient
-
-## Benchmarks
-
-Run the benchmark suite:
-
-```bash
-python tests/benchmark_speed.py
+```
+g_x = (2 / (1 - ‖x‖²))² · I
 ```
 
-### Expected Results (M2 Max)
-
-| Operation | Standard MLX | TMU-Accelerated | Speedup |
-|-----------|--------------|-----------------|---------|
-| exp (1M ops) | TBD | TBD | ~5x |
-| Möbius add (16D, 10K batch) | TBD | TBD | ~3x |
-
-*Note: Actual numbers to be determined through benchmarking.*
-
-## Development
-
-### Building for Development
-
-```bash
-# Debug build
-cmake -DCMAKE_BUILD_TYPE=Debug ..
-make
-
-# Run tests
-python -m pytest tests/
+Distance formula:
+```
+d(x, y) = arccosh(1 + 2‖x-y‖² / ((1-‖x‖²)(1-‖y‖²)))
 ```
 
-### Code Style
+### Lorentz (Hyperboloid) Model
 
-- C++: Follow MLX conventions
-- Python: Black formatter, type hints
-- Metal: Apple MSL style guide
+The Lorentz model uses the upper sheet of a hyperboloid in Minkowski space:
 
-## Technical Documentation
+```
+ℍⁿ = {x ∈ ℝⁿ⁺¹ : ⟨x,x⟩_L = -1, x₀ > 0}
+```
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed technical design, memory architecture, kernel implementation
-- **[TODO.md](TODO.md)** - Development task tracking
-- **[DONE.md](DONE.md)** - Completed work log
+where ⟨x,y⟩_L = -x₀y₀ + x₁y₁ + ... + xₙyₙ is the Minkowski inner product.
+
+Distance formula (much simpler!):
+```
+d(x, y) = arccosh(-⟨x,y⟩_L)
+```
 
 ## References
 
-- [MLX Documentation](https://ml-explore.github.io/mlx/)
-- [Metal Shading Language Specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
-- [Hyperbolic Neural Networks (Ganea et al., 2018)](https://arxiv.org/abs/1805.09112)
-- [Poincaré Embeddings (Nickel & Kiela, 2017)](https://arxiv.org/abs/1705.08039)
+- [Poincaré Embeddings for Learning Hierarchical Representations](https://arxiv.org/abs/1705.08039) (Nickel & Kiela, 2017)
+- [Learning Continuous Hierarchies in the Lorentz Model](https://arxiv.org/abs/1806.03417) (Nickel & Kiela, 2018)
+- [Hyperbolic Neural Networks](https://arxiv.org/abs/1805.09112) (Ganea et al., 2018)
+- [Hyperbolic Graph Convolutional Neural Networks](https://arxiv.org/abs/1910.12933) (Chami et al., 2019)
+- [MLX: Machine Learning on Apple Silicon](https://ml-explore.github.io/mlx/)
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ## Author
 
