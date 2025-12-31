@@ -11,6 +11,7 @@ import mlx.core as mx
 # Try to import the C++ extension, fall back to pure MLX if not available
 try:
     from . import _mlx_hyperbolic_ext as _ext
+
     _HAS_EXT = True
 except ImportError:
     _ext = None
@@ -21,6 +22,7 @@ except ImportError:
 # LUT Cache
 # ==============================================================================
 
+
 class LUTCache:
     """
     Lazy-initialized cache for lookup tables.
@@ -28,6 +30,7 @@ class LUTCache:
     LUTs are generated on first use and cached for subsequent calls.
     Use clear_lut_cache() to free memory if needed.
     """
+
     _exp_lut: Optional[mx.array] = None
     _log_lut: Optional[mx.array] = None
     _tanh_lut: Optional[mx.array] = None
@@ -50,11 +53,8 @@ def clear_lut_cache() -> None:
 # LUT Generation
 # ==============================================================================
 
-def generate_exp_lut(
-    size: int = 4096,
-    min_val: float = 0.0,
-    max_val: float = 10.0
-) -> mx.array:
+
+def generate_exp_lut(size: int = 4096, min_val: float = 0.0, max_val: float = 10.0) -> mx.array:
     """
     Generate exponential lookup table.
 
@@ -68,14 +68,10 @@ def generate_exp_lut(
     """
     t = mx.linspace(min_val, max_val, size)
     lut = mx.exp(t)
-    return mx.astype(lut, mx.float16)
+    return lut.astype(mx.float16)
 
 
-def generate_log_lut(
-    size: int = 4096,
-    min_val: float = 1e-6,
-    max_val: float = 10.0
-) -> mx.array:
+def generate_log_lut(size: int = 4096, min_val: float = 1e-6, max_val: float = 10.0) -> mx.array:
     """
     Generate natural logarithm lookup table.
 
@@ -91,14 +87,10 @@ def generate_log_lut(
         raise ValueError("min_val must be > 0 for log LUT")
     t = mx.linspace(min_val, max_val, size)
     lut = mx.log(t)
-    return mx.astype(lut, mx.float16)
+    return lut.astype(mx.float16)
 
 
-def generate_tanh_lut(
-    size: int = 4096,
-    min_val: float = -5.0,
-    max_val: float = 5.0
-) -> mx.array:
+def generate_tanh_lut(size: int = 4096, min_val: float = -5.0, max_val: float = 5.0) -> mx.array:
     """
     Generate tanh lookup table.
 
@@ -112,12 +104,13 @@ def generate_tanh_lut(
     """
     t = mx.linspace(min_val, max_val, size)
     lut = mx.tanh(t)
-    return mx.astype(lut, mx.float16)
+    return lut.astype(mx.float16)
 
 
 # ==============================================================================
 # LUT-Based Fast Operations
 # ==============================================================================
+
 
 def _lut_lookup(x: mx.array, lut: mx.array, min_val: float, max_val: float) -> mx.array:
     """
@@ -152,8 +145,8 @@ def _lut_lookup(x: mx.array, lut: mx.array, min_val: float, max_val: float) -> m
     frac = indices - idx_low
 
     # Fetch values (convert indices to int32 for indexing)
-    idx_low_int = mx.astype(idx_low, mx.int32)
-    idx_high_int = mx.astype(idx_high, mx.int32)
+    idx_low_int = idx_low.astype(mx.int32)
+    idx_high_int = idx_high.astype(mx.int32)
 
     val_low = lut[idx_low_int]
     val_high = lut[idx_high_int]
@@ -182,14 +175,12 @@ def fast_exp(x: mx.array) -> mx.array:
         array([1.649, 2.719, 7.391], dtype=float16)
     """
     # Ensure float16 for TMU optimization
-    x = mx.astype(x, mx.float16)
+    x = x.astype(mx.float16)
 
     # Get or create LUT
     if LUTCache._exp_lut is None:
         LUTCache._exp_lut = generate_exp_lut(
-            LUTCache._lut_size,
-            LUTCache._exp_range[0],
-            LUTCache._exp_range[1]
+            LUTCache._lut_size, LUTCache._exp_range[0], LUTCache._exp_range[1]
         )
 
     min_val, max_val = LUTCache._exp_range
@@ -214,13 +205,11 @@ def fast_log(x: mx.array) -> mx.array:
         >>> fast_log(x)
         array([0.0, 1.0, 2.303], dtype=float16)
     """
-    x = mx.astype(x, mx.float16)
+    x = x.astype(mx.float16)
 
     if LUTCache._log_lut is None:
         LUTCache._log_lut = generate_log_lut(
-            LUTCache._lut_size,
-            LUTCache._log_range[0],
-            LUTCache._log_range[1]
+            LUTCache._lut_size, LUTCache._log_range[0], LUTCache._log_range[1]
         )
 
     min_val, max_val = LUTCache._log_range
@@ -245,13 +234,11 @@ def fast_tanh(x: mx.array) -> mx.array:
         >>> fast_tanh(x)
         array([-0.762, 0.0, 0.762], dtype=float16)
     """
-    x = mx.astype(x, mx.float16)
+    x = x.astype(mx.float16)
 
     if LUTCache._tanh_lut is None:
         LUTCache._tanh_lut = generate_tanh_lut(
-            LUTCache._lut_size,
-            LUTCache._tanh_range[0],
-            LUTCache._tanh_range[1]
+            LUTCache._lut_size, LUTCache._tanh_range[0], LUTCache._tanh_range[1]
         )
 
     min_val, max_val = LUTCache._tanh_range
@@ -261,6 +248,7 @@ def fast_tanh(x: mx.array) -> mx.array:
 # ==============================================================================
 # Hyperbolic Geometry Operations (Poincaré Ball Model)
 # ==============================================================================
+
 
 def mobius_add(x: mx.array, y: mx.array, c: float = 1.0) -> mx.array:
     """

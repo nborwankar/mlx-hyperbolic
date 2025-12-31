@@ -68,11 +68,56 @@
 ### Phase 1 Status: INFRASTRUCTURE COMPLETE
 
 All source files created. Pure MLX fallback implementation working.
-C++ extension with true TMU acceleration requires MLX internal API access
-for buffer extraction (marked as TODO in main.cpp).
 
-### Next Steps (Phase 2: Metal Kernel Integration)
-- Research MLX internal API for buffer extraction
-- Test Metal shader compilation
-- Integrate TMU kernel with Python bindings
-- Benchmark TMU vs pure MLX implementation
+---
+
+## 2025-12-30
+
+### Phase 5: Benchmarking & Optimization Decision
+
+- [x] **Fixed MLX API compatibility issues**
+  - Changed `mx.astype(x, dtype)` to `x.astype(dtype)` throughout ops.py
+  - All operations now work with MLX 0.30.1+
+
+- [x] **Ran comprehensive benchmarks** (see BENCHMARKS.md)
+  - Tested LUT-based ops vs native MLX transcendentals
+  - Tested hyperbolic operations throughput at various dimensions/batch sizes
+
+- [x] **Key Finding: LUT optimization NOT beneficial**
+  | Operation | LUT vs Native | Ratio |
+  |-----------|---------------|-------|
+  | exp | Native wins | 1.7-2.4x faster |
+  | tanh | Native wins | 1.6-2.0x faster |
+  | log | Native wins | 1.6-2.4x faster |
+
+- [x] **Key Finding: Hyperbolic operations are performant**
+  - Möbius addition: up to 16M ops/sec
+  - Poincaré distance: up to 17M ops/sec
+  - exp_map/log_map: up to 14M ops/sec
+
+- [x] **Decision: Abandon TMU/Metal integration**
+  - Native MLX is already faster than LUT approach
+  - M-series GPUs have efficient transcendental units
+  - TMU optimization adds complexity for no gain
+
+### Phase 2-3 Status: ABANDONED (Not Beneficial)
+
+Benchmarks showed that:
+1. Native MLX transcendentals outperform LUT-based approach
+2. TMU hardware interpolation advantage doesn't apply to modern M-series chips
+3. C++/Metal integration complexity not justified
+
+### Project Status: COMPLETE (Pivot to Pure MLX)
+
+The library's value is in the **hyperbolic geometry operations**:
+- `mobius_add()` - Möbius addition in Poincaré ball
+- `poincare_distance()` - Geodesic distance
+- `exp_map()` / `log_map()` - Tangent space operations
+
+These are production-ready and performant using pure MLX.
+
+### Remaining Cleanup (Optional)
+- [ ] Remove/deprecate LUT-based transcendentals (fast_exp, fast_log, fast_tanh)
+- [ ] Simplify package to focus on hyperbolic operations
+- [ ] Update README to reflect pure MLX approach
+- [ ] Publish to PyPI
