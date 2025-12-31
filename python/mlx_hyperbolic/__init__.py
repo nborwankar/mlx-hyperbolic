@@ -32,20 +32,10 @@ __author__ = "Nitin Borwankar"
 
 # Poincaré ball model operations
 from .ops import (
-    # Hyperbolic operations (Poincaré)
     mobius_add,
     poincare_distance,
     exp_map,
     log_map,
-    # LUT-based operations (deprecated - native MLX is faster)
-    generate_exp_lut,
-    generate_log_lut,
-    generate_tanh_lut,
-    fast_exp,
-    fast_log,
-    fast_tanh,
-    LUTCache,
-    clear_lut_cache,
 )
 
 # Lorentz (hyperboloid) model operations
@@ -90,13 +80,4 @@ __all__ = [
     # === Model Conversions ===
     "poincare_to_lorentz",
     "lorentz_to_poincare",
-    # === LUT Operations (deprecated) ===
-    "generate_exp_lut",
-    "generate_log_lut",
-    "generate_tanh_lut",
-    "fast_exp",
-    "fast_log",
-    "fast_tanh",
-    "LUTCache",
-    "clear_lut_cache",
 ]

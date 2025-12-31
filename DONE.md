@@ -119,5 +119,52 @@ These are production-ready and performant using pure MLX.
 ### Remaining Cleanup (Optional)
 - [ ] Remove/deprecate LUT-based transcendentals (fast_exp, fast_log, fast_tanh)
 - [ ] Simplify package to focus on hyperbolic operations
-- [ ] Update README to reflect pure MLX approach
+- [x] Update README to reflect pure MLX approach ✓
 - [ ] Publish to PyPI
+
+---
+
+### Lorentz (Hyperboloid) Model Implementation
+
+- [x] **Created lorentz.py module** (~370 lines)
+  - Core operations: `minkowski_inner`, `minkowski_norm`, `lorentz_distance`, `lorentz_distance_squared`
+  - Mappings: `exp_map_lorentz`, `log_map_lorentz`, `parallel_transport_lorentz`
+  - Utilities: `project_to_hyperboloid`, `lorentz_centroid`, `check_on_hyperboloid`
+  - Model conversions: `poincare_to_lorentz`, `lorentz_to_poincare`
+
+- [x] **Validated Lorentz model benefits**
+  - More numerically stable than Poincaré near boundary
+  - 10-33% faster in benchmark comparisons
+  - No conformal factor explosion (λ → ∞ as ||x|| → 1)
+
+- [x] **Updated package exports**
+  - Version bumped to 0.2.0
+  - Both Poincaré and Lorentz operations exported from `__init__.py`
+
+### Comprehensive Benchmarking
+
+- [x] **PyManopt comparison** (see PYMANOPT_vs_MLX.md)
+  - MLX 122-183x faster than PyManopt (CPU)
+  - Honest FLOP analysis: ~500 FLOPs per distance computation
+  - Roofline model: memory-bound (1 FLOP/byte vs 34 FLOP/byte crossover)
+  - 0.06% GPU compute utilization (expected for memory-bound workloads)
+
+- [x] **Geoopt comparison** (see GEOOPT_vs_MLX.md)
+  - MLX 2.2x faster than geoopt + PyTorch MPS on same GPU
+  - Geoopt Lorentz doesn't work on MPS (requires float64)
+  - MLX has no dtype limitations
+
+### Documentation
+
+- [x] **README.md** - Complete rewrite with both models
+- [x] **BENCHMARKS.md** - LUT vs native MLX results
+- [x] **PYMANOPT_vs_MLX.md** - Comparison with roofline analysis
+- [x] **GEOOPT_vs_MLX.md** - PyTorch MPS comparison
+
+### Project Status: COMPLETE ✓
+
+The mlx-hyperbolic library provides:
+1. **Poincaré ball model** - Classic hyperbolic operations
+2. **Lorentz (hyperboloid) model** - Numerically stable alternative
+3. **Model conversions** - Seamless switching between representations
+4. **122x speedup** over PyManopt, **2.2x** over geoopt+MPS

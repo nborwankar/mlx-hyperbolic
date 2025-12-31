@@ -2,15 +2,13 @@
 requires = [
     "setuptools>=61.0",
     "wheel",
-    "cmake>=3.24",
-    "pybind11>=2.10",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlx-hyperbolic"
-version = "0.1.0"
-description = "Hardware-accelerated hyperbolic embeddings using TMU-based LUT lookups on Apple Silicon"
+version = "0.2.0"
+description = "Fast hyperbolic geometry operations for MLX on Apple Silicon. Poincaré ball and Lorentz (hyperboloid) models with GPU acceleration."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -36,8 +34,10 @@ keywords = [
     "metal",
     "gpu",
     "machine-learning",
-    "neural-networks",
     "poincare",
+    "lorentz",
+    "hyperboloid",
+    "riemannian",
 ]
 requires-python = ">=3.11"
 dependencies = [

@@ -204,6 +204,20 @@ All operations run on Apple Silicon GPU via MLX:
 
 > **Note**: Both implementations are memory-bound (~8 GFLOPS achieved vs 13,600 GFLOPS M2 Max peak). The speedup comes from eliminating Python loop overhead and using GPU memory bandwidth, not from saturating compute. See [PYMANOPT_vs_MLX.md](PYMANOPT_vs_MLX.md) for detailed roofline analysis.
 
+### vs Geoopt (PyTorch MPS)
+
+| Operation | Geoopt (MPS) | MLX (Metal) | Speedup |
+|-----------|--------------|-------------|---------|
+| Poincaré Distance | 1.31 ms | 0.52 ms | **2.5x** |
+| ExpMap | 1.77 ms | 0.79 ms | **2.2x** |
+| LogMap | 1.69 ms | 0.74 ms | **2.3x** |
+
+Both run on the same Apple Silicon GPU. MLX's native Metal backend outperforms PyTorch's MPS translation layer.
+
+**Important**: Geoopt's Lorentz model requires `float64`, which MPS doesn't support. MLX Hyperbolic has no such limitation.
+
+See [GEOOPT_vs_MLX.md](GEOOPT_vs_MLX.md) for detailed comparison.
+
 ## Project Structure
 
 ```
@@ -217,6 +231,7 @@ mlx_hyp/
 ├── README.md
 ├── BENCHMARKS.md        # LUT vs native MLX benchmarks
 ├── PYMANOPT_vs_MLX.md   # Comparison with PyManopt + roofline analysis
+├── GEOOPT_vs_MLX.md     # Comparison with geoopt (PyTorch MPS)
 ├── DONE.md              # Development log
 └── TODO.md              # Status tracking
 ```

@@ -1,248 +1,19 @@
 """
-Core operations for mlx_hyperbolic.
+Poincaré ball model operations for hyperbolic geometry.
 
-This module provides TMU-accelerated transcendental functions and
-hyperbolic geometry operations for the Poincaré ball model.
+This module provides hyperbolic geometry operations for the Poincaré ball model,
+a popular representation of hyperbolic space where points lie within the unit ball.
+
+Key operations:
+- mobius_add: Möbius addition (hyperbolic "addition")
+- poincare_distance: Geodesic distance in the Poincaré ball
+- exp_map: Project tangent vector to manifold
+- log_map: Project point back to tangent space
+
+For the numerically stable Lorentz (hyperboloid) model, see lorentz.py.
 """
 
-from typing import Optional, Tuple
 import mlx.core as mx
-
-# Try to import the C++ extension, fall back to pure MLX if not available
-try:
-    from . import _mlx_hyperbolic_ext as _ext
-
-    _HAS_EXT = True
-except ImportError:
-    _ext = None
-    _HAS_EXT = False
-
-
-# ==============================================================================
-# LUT Cache
-# ==============================================================================
-
-
-class LUTCache:
-    """
-    Lazy-initialized cache for lookup tables.
-
-    LUTs are generated on first use and cached for subsequent calls.
-    Use clear_lut_cache() to free memory if needed.
-    """
-
-    _exp_lut: Optional[mx.array] = None
-    _log_lut: Optional[mx.array] = None
-    _tanh_lut: Optional[mx.array] = None
-
-    # LUT parameters
-    _exp_range: Tuple[float, float] = (0.0, 10.0)
-    _log_range: Tuple[float, float] = (1e-6, 10.0)
-    _tanh_range: Tuple[float, float] = (-5.0, 5.0)
-    _lut_size: int = 4096
-
-
-def clear_lut_cache() -> None:
-    """Clear all cached LUTs to free memory."""
-    LUTCache._exp_lut = None
-    LUTCache._log_lut = None
-    LUTCache._tanh_lut = None
-
-
-# ==============================================================================
-# LUT Generation
-# ==============================================================================
-
-
-def generate_exp_lut(size: int = 4096, min_val: float = 0.0, max_val: float = 10.0) -> mx.array:
-    """
-    Generate exponential lookup table.
-
-    Args:
-        size: Number of table entries (default 4096)
-        min_val: Minimum input value (default 0.0)
-        max_val: Maximum input value (default 10.0)
-
-    Returns:
-        Float16 array of pre-computed exp values
-    """
-    t = mx.linspace(min_val, max_val, size)
-    lut = mx.exp(t)
-    return lut.astype(mx.float16)
-
-
-def generate_log_lut(size: int = 4096, min_val: float = 1e-6, max_val: float = 10.0) -> mx.array:
-    """
-    Generate natural logarithm lookup table.
-
-    Args:
-        size: Number of table entries (default 4096)
-        min_val: Minimum input value, must be > 0 (default 1e-6)
-        max_val: Maximum input value (default 10.0)
-
-    Returns:
-        Float16 array of pre-computed log values
-    """
-    if min_val <= 0:
-        raise ValueError("min_val must be > 0 for log LUT")
-    t = mx.linspace(min_val, max_val, size)
-    lut = mx.log(t)
-    return lut.astype(mx.float16)
-
-
-def generate_tanh_lut(size: int = 4096, min_val: float = -5.0, max_val: float = 5.0) -> mx.array:
-    """
-    Generate tanh lookup table.
-
-    Args:
-        size: Number of table entries (default 4096)
-        min_val: Minimum input value (default -5.0)
-        max_val: Maximum input value (default 5.0)
-
-    Returns:
-        Float16 array of pre-computed tanh values
-    """
-    t = mx.linspace(min_val, max_val, size)
-    lut = mx.tanh(t)
-    return lut.astype(mx.float16)
-
-
-# ==============================================================================
-# LUT-Based Fast Operations
-# ==============================================================================
-
-
-def _lut_lookup(x: mx.array, lut: mx.array, min_val: float, max_val: float) -> mx.array:
-    """
-    Perform LUT lookup with linear interpolation.
-
-    This is the pure MLX fallback. When the C++ extension is available,
-    this uses TMU hardware interpolation for ~5x speedup.
-
-    Args:
-        x: Input values
-        lut: Lookup table
-        min_val: Minimum value in LUT range
-        max_val: Maximum value in LUT range
-
-    Returns:
-        Interpolated values from LUT
-    """
-    # Normalize input to [0, 1] coordinate space
-    scale = 1.0 / (max_val - min_val)
-    normalized = (x - min_val) * scale
-
-    # Clamp to valid range
-    normalized = mx.clip(normalized, 0.0, 1.0)
-
-    # Convert to LUT indices
-    lut_size = lut.shape[0]
-    indices = normalized * (lut_size - 1)
-
-    # Linear interpolation between adjacent entries
-    idx_low = mx.floor(indices)
-    idx_high = mx.minimum(idx_low + 1, lut_size - 1)
-    frac = indices - idx_low
-
-    # Fetch values (convert indices to int32 for indexing)
-    idx_low_int = idx_low.astype(mx.int32)
-    idx_high_int = idx_high.astype(mx.int32)
-
-    val_low = lut[idx_low_int]
-    val_high = lut[idx_high_int]
-
-    # Interpolate
-    result = val_low + frac * (val_high - val_low)
-    return result
-
-
-def fast_exp(x: mx.array) -> mx.array:
-    """
-    TMU-accelerated exponential function.
-
-    Uses pre-computed LUT with hardware linear interpolation.
-    Valid input range: [0, 10]. Values outside this range are clamped.
-
-    Args:
-        x: Input values (any dtype, converted to float16 internally)
-
-    Returns:
-        exp(x) as float16 array
-
-    Example:
-        >>> x = mx.array([0.5, 1.0, 2.0])
-        >>> fast_exp(x)
-        array([1.649, 2.719, 7.391], dtype=float16)
-    """
-    # Ensure float16 for TMU optimization
-    x = x.astype(mx.float16)
-
-    # Get or create LUT
-    if LUTCache._exp_lut is None:
-        LUTCache._exp_lut = generate_exp_lut(
-            LUTCache._lut_size, LUTCache._exp_range[0], LUTCache._exp_range[1]
-        )
-
-    min_val, max_val = LUTCache._exp_range
-    return _lut_lookup(x, LUTCache._exp_lut, min_val, max_val)
-
-
-def fast_log(x: mx.array) -> mx.array:
-    """
-    TMU-accelerated natural logarithm.
-
-    Uses pre-computed LUT with hardware linear interpolation.
-    Valid input range: [1e-6, 10]. Values outside this range are clamped.
-
-    Args:
-        x: Input values (any dtype, converted to float16 internally)
-
-    Returns:
-        log(x) as float16 array
-
-    Example:
-        >>> x = mx.array([1.0, 2.718, 10.0])
-        >>> fast_log(x)
-        array([0.0, 1.0, 2.303], dtype=float16)
-    """
-    x = x.astype(mx.float16)
-
-    if LUTCache._log_lut is None:
-        LUTCache._log_lut = generate_log_lut(
-            LUTCache._lut_size, LUTCache._log_range[0], LUTCache._log_range[1]
-        )
-
-    min_val, max_val = LUTCache._log_range
-    return _lut_lookup(x, LUTCache._log_lut, min_val, max_val)
-
-
-def fast_tanh(x: mx.array) -> mx.array:
-    """
-    TMU-accelerated hyperbolic tangent.
-
-    Uses pre-computed LUT with hardware linear interpolation.
-    Valid input range: [-5, 5]. Values outside this range are clamped.
-
-    Args:
-        x: Input values (any dtype, converted to float16 internally)
-
-    Returns:
-        tanh(x) as float16 array
-
-    Example:
-        >>> x = mx.array([-1.0, 0.0, 1.0])
-        >>> fast_tanh(x)
-        array([-0.762, 0.0, 0.762], dtype=float16)
-    """
-    x = x.astype(mx.float16)
-
-    if LUTCache._tanh_lut is None:
-        LUTCache._tanh_lut = generate_tanh_lut(
-            LUTCache._lut_size, LUTCache._tanh_range[0], LUTCache._tanh_range[1]
-        )
-
-    min_val, max_val = LUTCache._tanh_range
-    return _lut_lookup(x, LUTCache._tanh_lut, min_val, max_val)
 
 
 # ==============================================================================
@@ -337,9 +108,7 @@ def exp_map(v: mx.array, x: mx.array, c: float = 1.0) -> mx.array:
     lambda_x = 2.0 / (1.0 - c * x_norm_sq)
 
     # Scaled tangent vector
-    # Using fast_tanh for potential TMU acceleration
     tanh_arg = sqrt_c * lambda_x * v_norm / 2.0
-    # Fall back to mx.tanh for now (fast_tanh expects float16)
     tanh_val = mx.tanh(tanh_arg)
 
     # Avoid division by zero

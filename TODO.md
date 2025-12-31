@@ -4,97 +4,70 @@
 
 ## Status: PROJECT COMPLETE ✅
 
-The core hyperbolic geometry operations are working and performant.
-Benchmarks showed TMU optimization is not beneficial - native MLX is faster.
+Both Poincaré ball and Lorentz (hyperboloid) models implemented and benchmarked.
 
 ---
 
 ## ✅ COMPLETED
 
-### Phase 1: Infrastructure
-- [x] Directory structure (src/, python/, tests/)
-- [x] CMakeLists.txt (for reference, not needed)
-- [x] Python package with pure MLX implementation
-- [x] README.md documentation
+### Phase 1: Core Implementation
+- [x] Poincaré ball model (ops.py)
+  - `mobius_add()`, `poincare_distance()`, `exp_map()`, `log_map()`
+- [x] Lorentz hyperboloid model (lorentz.py)
+  - `lorentz_distance()`, `exp_map_lorentz()`, `log_map_lorentz()`
+  - `parallel_transport_lorentz()`, `lorentz_centroid()`
+  - Model conversions: `poincare_to_lorentz()`, `lorentz_to_poincare()`
+- [x] Comprehensive documentation (README.md)
 
-### Phase 4: Python Integration (Core Value)
-- [x] `mobius_add()` - Möbius addition in Poincaré ball
-- [x] `poincare_distance()` - Geodesic distance
-- [x] `exp_map()` - Project tangent vector to manifold
-- [x] `log_map()` - Project point to tangent space
+### Phase 2: Benchmarking
+- [x] vs PyManopt: 122-183x faster (see PYMANOPT_vs_MLX.md)
+- [x] vs Geoopt (PyTorch MPS): 2.2x faster (see GEOOPT_vs_MLX.md)
+- [x] Roofline analysis: memory-bound workload (honest performance analysis)
 
-### Phase 5: Benchmarking
-- [x] LUT vs Native MLX comparison → Native wins (1.6-2.4x faster)
-- [x] Hyperbolic operations throughput → 2-17M ops/sec
-- [x] Decision: Use pure MLX, abandon TMU optimization
-
----
-
-## ❌ ABANDONED (Not Beneficial)
-
-### Phase 2: Metal Kernel Integration
-- ~~Test Metal shader compilation~~
-- ~~TMU-based LUT sampling~~
-
-**Reason**: Native MLX transcendentals are already faster than LUT approach.
-
-### Phase 3: C++ Glue Code
-- ~~MLX buffer extraction~~
-- ~~Zero-copy texture binding~~
-
-**Reason**: Complexity not justified; no performance benefit.
+### Phase 3: Package Cleanup
+- [x] Removed deprecated TMU/LUT code (moved to _deprecated/)
+- [x] Clean __init__.py with only hyperbolic operations
+- [x] Updated pyproject.toml for v0.2.0
+- [x] Added LICENSE (MIT) and .gitignore
 
 ---
 
-## ⏳ OPTIONAL CLEANUP
+## ⏳ NEXT: PyPI Distribution
 
-These are nice-to-haves, not required for library to be useful:
+### GitHub Setup
+- [ ] Create repo: github.com/nborwankar/mlx-hyperbolic
+- [ ] Push code
+- [ ] Add GitHub Actions CI (optional)
 
-### Simplify Package
-- [ ] Remove LUT-based transcendentals (fast_exp, fast_log, fast_tanh)
-- [ ] Remove C++/Metal code (src/ directory)
-- [ ] Update imports in __init__.py
-- [ ] Simplify README to focus on hyperbolic operations
-
-### Quality
-- [ ] Add unit tests for hyperbolic operations
-- [ ] Fix fast_log precision issue (or just remove it)
-- [ ] Add type hints validation (mypy)
-
-### Distribution
-- [ ] Publish to PyPI as `mlx-hyperbolic`
-- [ ] Add GitHub Actions CI
+### PyPI Publishing
+- [ ] Create PyPI account (if needed)
+- [ ] Build distribution: `python -m build`
+- [ ] Upload to TestPyPI first: `twine upload --repository testpypi dist/*`
+- [ ] Test install: `pip install -i https://test.pypi.org/simple/ mlx-hyperbolic`
+- [ ] Upload to PyPI: `twine upload dist/*`
 
 ---
 
-## Usage (Current State)
+## Usage
 
 ```python
 import mlx.core as mx
-from mlx_hyperbolic import mobius_add, poincare_distance, exp_map, log_map
+from mlx_hyperbolic import (
+    # Poincaré ball
+    mobius_add, poincare_distance, exp_map, log_map,
+    # Lorentz hyperboloid
+    lorentz_distance, exp_map_lorentz, log_map_lorentz,
+    # Conversions
+    poincare_to_lorentz, lorentz_to_poincare,
+)
 
-# Möbius addition in Poincaré ball
+# Poincaré ball
 x = mx.array([0.1, 0.2, 0.3])
 y = mx.array([0.2, 0.1, 0.2])
-result = mobius_add(x, y)
+d = poincare_distance(x, y)
 
-# Geodesic distance
-dist = poincare_distance(x, y)
-
-# Exponential/logarithmic maps
-tangent = mx.array([0.1, 0.1, 0.1])
-origin = mx.zeros(3)
-point = exp_map(tangent, origin)
-recovered = log_map(point, origin)
+# Lorentz (more stable)
+x_L = poincare_to_lorentz(x)
+y_L = poincare_to_lorentz(y)
+d_L = lorentz_distance(x_L, y_L)  # Same value, better numerics
 ```
-
----
-
-## Performance Summary
-
-| Operation | Dim=16, Batch=10K | Dim=768, Batch=10K |
-|-----------|------------------|-------------------|
-| mobius_add | 16.1M ops/sec | 3.6M ops/sec |
-| poincare_distance | 17.0M ops/sec | 2.6M ops/sec |
-| exp_map | 13.7M ops/sec | 2.1M ops/sec |
-| log_map | 14.3M ops/sec | 2.0M ops/sec |
