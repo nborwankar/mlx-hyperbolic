@@ -27,7 +27,7 @@ Example (Lorentz):
     >>> d = lorentz_distance(x_L, y_L)  # Same distance, more stable
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "Nitin Borwankar"
 
 # Poincaré ball model operations
