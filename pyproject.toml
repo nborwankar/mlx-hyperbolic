@@ -10,15 +10,14 @@ name = "mlx-hyperbolic"
 version = "0.2.0"
 description = "Fast hyperbolic geometry operations for MLX on Apple Silicon. Poincaré ball and Lorentz (hyperboloid) models with GPU acceleration."
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Nitin Borwankar", email = "nitin@example.com"}
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
