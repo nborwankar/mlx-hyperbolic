@@ -2,6 +2,15 @@
 
 Fast hyperbolic neural network primitives on Apple Silicon. Supports both **Poincaré ball** and **Lorentz (hyperboloid)** models with GPU acceleration via MLX.
 
+| Benchmark | Result | Details |
+|-----------|--------|---------|
+| vs PyManopt (CPU) | **22× (batch=1K) → 183× (batch=10K)**; sustained analysis **122×** | [PYMANOPT_vs_MLX.md](PYMANOPT_vs_MLX.md) |
+| vs geoopt (PyTorch MPS), same GPU | **2.2–2.5×** per operation | [GEOOPT_vs_MLX.md](GEOOPT_vs_MLX.md) |
+| Throughput | up to **22.6M ops/sec** (`lorentz_distance`, dim=16, batch=10K) | tables below |
+| float64 | not required — geoopt's Lorentz needs f64, which MPS lacks; MLX has no such limitation | [GEOOPT_vs_MLX.md](GEOOPT_vs_MLX.md) |
+
+Full primitive set for both models: distances, exp/log maps, Möbius addition, parallel transport, centroids, model conversion.
+
 ## Why Hyperbolic?
 
 Hyperbolic space naturally represents hierarchical data (trees, taxonomies, knowledge graphs) with exponentially more space as you move from the center. This makes it ideal for:
@@ -27,8 +36,8 @@ Both represent the same geometric space — convert freely between them.
 pip install mlx
 
 # Clone and install
-git clone https://github.com/nborwankar/mlx_hyp.git
-cd mlx_hyp
+git clone https://github.com/nborwankar/mlx-hyperbolic.git
+cd mlx-hyperbolic
 pip install -e .
 ```
 
@@ -221,7 +230,7 @@ See [GEOOPT_vs_MLX.md](GEOOPT_vs_MLX.md) for detailed comparison.
 ## Project Structure
 
 ```
-mlx_hyp/
+mlx-hyperbolic/
 ├── python/mlx_hyperbolic/
 │   ├── __init__.py      # Package exports
 │   ├── ops.py           # Poincaré ball operations
